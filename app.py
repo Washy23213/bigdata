@@ -7,7 +7,9 @@ import seaborn as sns
 from sklearn.metrics import accuracy_score, confusion_matrix
 
 # Load the trained model and scaler
-model = joblib.load("SVM_best_model.pkl")  # Replace with your best model filename
+model = joblib.load("SVM_best_model.pkl")
+scaler = joblib.load("scaler.pkl")         # Load the scaler
+X_test, y_test = joblib.load("test_data.pkl")# Replace with your best model filename
 
 
 # Title
