@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import accuracy_score, confusion_matrix
 
-# Load model, scaler, test data
+# Load model, scaler, and test data
 model = joblib.load("SVM_best_model.pkl")
 scaler = joblib.load("scaler.pkl")
 X_test, y_test = joblib.load("test_data.pkl")
@@ -14,35 +14,32 @@ X_test, y_test = joblib.load("test_data.pkl")
 # Title
 st.title("🍽 Food Inspection Results Predictor")
 
-# Sidebar for input mode
+# Sidebar input mode selection
 mode = st.sidebar.radio("Choose input mode", ["Manual Input", "CSV Upload"])
 
-# Helper: map categorical strings to integers (use your training mappings)
+# Mappings - Make sure these match your training data categorical mappings
 inspection_type_map = {"Type A": 0, "Type B": 1, "Type C": 2}
 facility_type_map = {"Grocery Store": 0, "Restaurant": 1, "Food Stand": 2}
 risk_map = {"Low": 0, "Medium": 1, "High": 2}
 
 def preprocess_input(df):
-    # Map categorical to int
+    # Map categorical strings to integers
     df["Inspection Type"] = df["Inspection Type"].map(inspection_type_map)
     df["Facility Type"] = df["Facility Type"].map(facility_type_map)
     df["Risk"] = df["Risk"].map(risk_map)
     
-    # Convert Inspection Date to datetime
+    # Convert Inspection Date to datetime and extract date parts
     df["Inspection Date"] = pd.to_datetime(df["Inspection Date"])
-    
-    # Extract numeric date features
     df["Inspection_Year"] = df["Inspection Date"].dt.year
     df["Inspection_Month"] = df["Inspection Date"].dt.month
     df["Inspection_Day"] = df["Inspection Date"].dt.day
     
-    # Drop original date column after extraction
+    # Drop the original Inspection Date
     df = df.drop(columns=["Inspection Date"])
     
-    # Reorder columns to match scaler and model input (IMPORTANT!)
+    # Reorder columns to match model input feature order
     features_order = ["Inspection Type", "Risk", "Facility Type",
                       "Inspection_Year", "Inspection_Month", "Inspection_Day"]
-    
     df = df[features_order]
     return df
 
@@ -71,7 +68,7 @@ def predict(df):
     preds = model.predict(df_scaled)
     return preds
 
-# Show confusion matrix and accuracy
+# Show confusion matrix and accuracy from test data
 def show_confusion_matrix():
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
