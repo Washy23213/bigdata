@@ -6,11 +6,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import accuracy_score, confusion_matrix
 
-# Load the trained model and scaler
+# Load the trained model, scaler, and test data
 model = joblib.load("SVM_best_model.pkl")
-scaler = joblib.load("scaler.pkl")         # Load the scaler
-X_test, y_test = joblib.load("test_data.pkl")# Replace with your best model filename
-
+scaler = joblib.load("scaler.pkl")
+X_test, y_test = joblib.load("test_data.pkl")  # Assumes (X_test, y_test) tuple
 
 # Title
 st.title("🍽 Food Inspection Results Predictor")
@@ -18,27 +17,26 @@ st.title("🍽 Food Inspection Results Predictor")
 # Sidebar for user input mode
 mode = st.sidebar.radio("Choose input mode", ["Manual Input", "CSV Upload"])
 
-# Input form
+# Input form with example feature names
 def get_user_input():
     st.subheader("Enter feature values")
-    # Customize this with your actual feature names and types
-    feature1 = st.number_input("Feature 1")
-    feature2 = st.number_input("Feature 2")
-    feature3 = st.selectbox("Feature 3 (categorical)", [0, 1])  # Example dummy value
-    return pd.DataFrame([[feature1, feature2, feature3]], columns=["Feature1", "Feature2", "Feature3"])
+    
+    # Replace these with actual feature names used in your model
+    inspection_score = st.number_input("Inspection Score", min_value=0.0, max_value=100.0, value=85.0)
+    facility_type = st.selectbox("Facility Type", {"Grocery Store": 0, "Restaurant": 1})
+    risk_level = st.selectbox("Risk Level", {"Low": 0, "Medium": 1, "High": 2})
+    
+    return pd.DataFrame([[inspection_score, facility_type, risk_level]],
+                        columns=["Inspection_Score", "Facility_Type", "Risk_Level"])
 
-# Prediction
+# Prediction function
 def predict(df):
     df_scaled = scaler.transform(df)
     predictions = model.predict(df_scaled)
     return predictions
 
-# Accuracy
-def load_test_data():
-    return joblib.load("test_data.pkl")  # Save (X_test, y_test) in training script for evaluation here
-
+# Show confusion matrix and accuracy
 def show_confusion_matrix():
-    X_test, y_test = load_test_data()
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     cm = confusion_matrix(y_test, y_pred)
@@ -51,7 +49,7 @@ def show_confusion_matrix():
     ax.set_ylabel("Actual")
     st.pyplot(fig)
 
-# Input Handling
+# Handle user input
 if mode == "Manual Input":
     input_df = get_user_input()
     if st.button("Predict"):
@@ -70,6 +68,6 @@ elif mode == "CSV Upload":
             st.success("Predictions completed!")
             st.write(df)
 
-# Show performance metrics
+# Show model performance summary
 if st.checkbox("Show Model Performance Summary"):
     show_confusion_matrix()
