@@ -3,7 +3,7 @@ import numpy as np
 import joblib
 
 # Load saved model and scaler
-model = joblib.load("best_model.pkl")
+model = joblib.load("SVM_best_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
 # Columns dropped during training
