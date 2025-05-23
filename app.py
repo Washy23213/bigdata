@@ -1,83 +1,108 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import accuracy_score, confusion_matrix
 
-# Load saved model and scaler
+# Load model, scaler, test data
 model = joblib.load("SVM_best_model.pkl")
 scaler = joblib.load("scaler.pkl")
+X_test, y_test = joblib.load("test_data.pkl")
 
-# Columns dropped during training
-cols_to_drop = ['Inspection ID', 'DBA Name', 'AKA Name', 'License #', 'Address', 'City',
-                'State', 'Zip', 'Location', 'Facility Type', 'Inspection Date', 'Violations']
+# Title
+st.title("🍽 Food Inspection Results Predictor")
 
-# Function to preprocess new data to match training preprocessing
-def preprocess_new_data(new_df, training_columns):
-    # 1. Drop columns that were dropped in training
-    new_df = new_df.drop(columns=[col for col in cols_to_drop if col in new_df.columns], errors='ignore')
+# Sidebar for input mode
+mode = st.sidebar.radio("Choose input mode", ["Manual Input", "CSV Upload"])
+
+# Helper: map categorical strings to integers (use your training mappings)
+inspection_type_map = {"Type A": 0, "Type B": 1, "Type C": 2}
+facility_type_map = {"Grocery Store": 0, "Restaurant": 1, "Food Stand": 2}
+risk_map = {"Low": 0, "Medium": 1, "High": 2}
+
+def preprocess_input(df):
+    # Map categorical to int
+    df["Inspection Type"] = df["Inspection Type"].map(inspection_type_map)
+    df["Facility Type"] = df["Facility Type"].map(facility_type_map)
+    df["Risk"] = df["Risk"].map(risk_map)
     
-    # 2. Drop rows with NA in target if target present (optional)
-    if 'Results' in new_df.columns:
-        new_df = new_df.dropna(subset=['Results'])
-    new_df = new_df.dropna()
+    # Convert Inspection Date to datetime
+    df["Inspection Date"] = pd.to_datetime(df["Inspection Date"])
     
-    # 3. Identify categorical columns except 'Results'
-    categorical_cols = new_df.select_dtypes(include=['object']).columns.tolist()
-    if 'Results' in categorical_cols:
-        categorical_cols.remove('Results')
+    # Extract numeric date features
+    df["Inspection_Year"] = df["Inspection Date"].dt.year
+    df["Inspection_Month"] = df["Inspection Date"].dt.month
+    df["Inspection_Day"] = df["Inspection Date"].dt.day
     
-    # 4. Apply one-hot encoding, drop first to match training
-    new_df_encoded = pd.get_dummies(new_df, columns=categorical_cols, drop_first=True)
+    # Drop original date column after extraction
+    df = df.drop(columns=["Inspection Date"])
     
-    # 5. Add missing columns that were in training but not in new_df_encoded, fill with zeros
-    missing_cols = set(training_columns) - set(new_df_encoded.columns)
-    for col in missing_cols:
-        new_df_encoded[col] = 0
+    # Reorder columns to match scaler and model input (IMPORTANT!)
+    features_order = ["Inspection Type", "Risk", "Facility Type",
+                      "Inspection_Year", "Inspection_Month", "Inspection_Day"]
     
-    # 6. Remove any extra columns not in training_columns (can happen if new categories appeared)
-    extra_cols = set(new_df_encoded.columns) - set(training_columns)
-    if extra_cols:
-        new_df_encoded.drop(columns=list(extra_cols), inplace=True)
+    df = df[features_order]
+    return df
+
+# Manual input form
+def get_user_input():
+    st.subheader("Enter feature values")
     
-    # 7. Reorder columns to exactly match training columns
-    new_df_encoded = new_df_encoded[training_columns]
+    inspection_type = st.selectbox("Inspection Type", list(inspection_type_map.keys()))
+    inspection_date = st.date_input("Inspection Date")
+    risk = st.selectbox("Risk Level", list(risk_map.keys()))
+    facility_type = st.selectbox("Facility Type", list(facility_type_map.keys()))
     
-    return new_df_encoded
+    data = {
+        "Inspection Type": [inspection_type],
+        "Inspection Date": [inspection_date],
+        "Risk": [risk],
+        "Facility Type": [facility_type],
+    }
+    df = pd.DataFrame(data)
+    df_processed = preprocess_input(df)
+    return df_processed
 
-# Load your original training dataset (to extract feature names)
-# You need this because your model expects exactly those columns and order
-train_df = pd.read_csv("/content/Food_Inspections_20250521.csv", engine="python", on_bad_lines="skip").sample(n=1000, random_state=42)
-train_df.drop(columns=cols_to_drop, inplace=True, errors='ignore')
-train_df.dropna(subset=["Results"], inplace=True)
-train_df.dropna(inplace=True)
+# Prediction function
+def predict(df):
+    df_scaled = scaler.transform(df)
+    preds = model.predict(df_scaled)
+    return preds
 
-categorical_cols_train = train_df.select_dtypes(include=['object']).columns.tolist()
-categorical_cols_train = [col for col in categorical_cols_train if col != 'Results']
-train_df_encoded = pd.get_dummies(train_df, columns=categorical_cols_train, drop_first=True)
+# Show confusion matrix and accuracy
+def show_confusion_matrix():
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    
+    st.subheader(f"Model Accuracy: {acc:.4f}")
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    st.pyplot(fig)
 
-# Final training features (X columns)
-training_columns = train_df_encoded.drop("Results", axis=1).columns.tolist()
+# Main app logic
+if mode == "Manual Input":
+    input_df = get_user_input()
+    if st.button("Predict"):
+        prediction = predict(input_df)
+        st.success(f"Predicted Class: {prediction[0]}")
 
-# Load your new raw data that you want to predict on
-new_data = pd.read_csv("/content/your_new_input.csv")  # Replace with your new file path
+elif mode == "CSV Upload":
+    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        st.write("Preview of uploaded data:")
+        st.write(df.head())
+        if st.button("Predict"):
+            df_processed = preprocess_input(df)
+            preds = predict(df_processed)
+            df["Prediction"] = preds
+            st.success("Predictions completed!")
+            st.write(df)
 
-# Preprocess new data to match training features
-X_new = preprocess_new_data(new_data, training_columns)
-
-# Scale features
-X_new_scaled = scaler.transform(X_new)
-
-# Predict with the loaded model
-predictions = model.predict(X_new_scaled)
-
-# If you want prediction probabilities (if model supports it)
-if hasattr(model, "predict_proba"):
-    pred_probs = model.predict_proba(X_new_scaled)
-
-# Map encoded labels back to original classes (optional)
-# If you used LabelEncoder on 'Results' during training:
-from sklearn.preprocessing import LabelEncoder
-label_encoder = LabelEncoder()
-label_encoder.fit(train_df['Results'])  # Fit on training target to get classes
-predicted_classes = label_encoder.inverse_transform(predictions)
-
-print(predicted_classes)
+if st.checkbox("Show Model Performance Summary"):
+    show_confusion_matrix()
