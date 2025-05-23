@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 
 # Load the trained model and scaler
 model = joblib.load("SVM_best_model.pkl")  # Replace with your best model filename
-scaler = joblib.load("scaler.pkl")  # Save and load this from your training script
+
 
 # Title
 st.title("🍽 Food Inspection Results Predictor")
